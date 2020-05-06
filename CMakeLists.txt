@@ -3,4 +3,4 @@ project(CA_Ex2)
 
 set(CMAKE_CXX_STANDARD 11)
 
-add_executable(CA_Ex2 cacheSim.cpp)
+add_executable(CA_Ex2 cacheSim.cpp main.cpp)
