@@ -67,7 +67,7 @@ int main(int argc, char **argv) {
 	double L2MissRate;
 	double avgAccTime;
 
-	cacheSimulator CSim(MemCyc, BSize, L1Size, L2Size, L1Assoc, L2Assoc, L1Cyc, L2Cyc, WrAlloc ,&L1MissRate, &L2MissRate ,&avgAccTime);
+    chacheSimulator CSim(MemCyc, BSize, L1Size, L2Size, L1Assoc, L2Assoc, L1Cyc, L2Cyc, WrAlloc ,&L1MissRate, &L2MissRate ,&avgAccTime);
 
 	while (getline(file, line)) {
 
