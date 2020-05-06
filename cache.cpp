@@ -57,6 +57,7 @@ public:
         }
         this->tagSize = 32 - log2(this->row) - BSize;
     }
+    void updateLru(int row, int column){
 
     void updateLru(int set, int way){
         int old_priority = lru[set*this->column+way];
@@ -66,17 +67,26 @@ public:
                 lru[set*this->column+i]--;
         }
     }
-
     //Check if Hit, update cycle and lru + update totalMiss
-    bool isHit(unsigned num){
-
+    bool isHit(unsigned address){
+        int addressRow = getRow(address,this->BSize,this->row);
+        unsigned addressTag = getTag(address,this->BSize,this->row);
+        for(int i=0; i<this->column; i++){
+            if(this->cache[addressRow*this->column+i].valid && this->cache[addressRow*this->column+i].tag == addressTag){
+                this->totalCyc+=this->LCyc;
+                this->updateLru(addressRow,i);
+                return true;
+            }
+        }
+        this->totalLMiss+=1;
+        return false;
     }
     //returns removed address if needed and inserts new address + update lru + update cycle
-    unsigned insert(unsigned num){
+    unsigned insert(unsigned address){
 
     }
     //removes lru in num row + invalid Entry + update cycle
-    void remove(unsigned num){
+    void remove(unsigned address){
 
     }
 };
