@@ -3,6 +3,23 @@
 //
 #include <math.h>
 
+
+//Returns the row number of the matching entry in BTB
+int getRow(unsigned long int address ,unsigned BSize, unsigned row){
+    unsigned long int indx = address;
+    indx = indx << (32 - (int)log2(row) - BSize);
+    indx = indx >> (32 - (int)log2(row));
+    return indx;
+}
+
+unsigned getTag(unsigned long int address ,unsigned BSize, unsigned row){
+    unsigned long int indx = address;
+    indx = indx >> ((int)log2(row) + BSize);
+    return indx;
+}
+
+
+
 class Entry{
 public:
     bool valid;
@@ -29,8 +46,8 @@ public:
     Cache(unsigned BSize, unsigned LSize, unsigned LAssoc, unsigned LCyc, unsigned WrAlloc , unsigned* totalLMiss,
             unsigned* totalCyc):BSize(BSize) ,LSize(LSize) ,LAssoc(LAssoc) ,LCyc(LCyc) ,totalLMiss(totalLMiss)
             ,totalCyc(totalCyc) ,WrAlloc(WrAlloc) ,cache(nullptr), lru(nullptr){
-        this->row = pow(2 ,LSize)/BSize;
         this->column = pow(2 ,LAssoc);
+        this->row = pow(2 ,LSize)/(BSize*this->column);
         this->cache = new Entry[this->row*this->column];
         this->lru =  new int[this->row*this->column];
         for(int i=0; i<row; i++){
