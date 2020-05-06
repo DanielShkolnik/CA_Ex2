@@ -57,9 +57,16 @@ public:
         }
         this->tagSize = 32 - log2(this->row) - BSize;
     }
-    void updateLru(int row, int column){
 
+    void updateLru(int set, int way){
+        int old_priority = lru[set*this->column+way];
+        lru[set*this->column+way] = this->column - 1;
+        for(int i = 0 ; i < this->column ; i++){
+            if((i != way) && (lru[set*this->column+i] > old_priority))
+                lru[set*this->column+i]--;
+        }
     }
+
     //Check if Hit, update cycle and lru + update totalMiss
     bool isHit(unsigned num){
 
