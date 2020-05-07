@@ -12,9 +12,10 @@ using namespace std;
 class Entry{
 public:
     bool valid;
+    bool dirty;
     unsigned tag;
     unsigned address;
-    Entry(): valid(false), tag(0), address(0){}
+    Entry(): valid(false), dirty(false), tag(0), address(0){}
 };
 
 
@@ -43,7 +44,7 @@ public:
         this->lru =  new int[this->row*this->column];
         for(unsigned i=0; i<row; i++){
             for(unsigned j=0; j<column; j++){
-                this->lru[i*column+j]=-1;
+                this->lru[i*column+j]=0;
             }
         }
         this->tagSize = (unsigned )(32 - log2(this->row) - BSize);
@@ -68,7 +69,7 @@ public:
 
     int getLruWay(int set){
         for(unsigned i = 0 ; i < this->column ; i++){
-            if(lru[set*this->column+i] == 0)
+            if(cache[set*this->column+i].valid && lru[set*this->column+i] == 0)
                 return i;
         }
         return -1;
@@ -100,12 +101,13 @@ public:
         *(this->access_num_L)+=1;
         if(!is_hit) *(this->totalLMiss)+=1;
 
-        std::cout <<"totalLMiss: " << *totalLMiss << std::endl;
+        //std::cout <<"totalLMiss: " << *totalLMiss << std::endl;
 
         return is_hit;
     }
+
     //returns removed address if needed and inserts new address + update lru + update cycle
-    void insert(unsigned address , unsigned* removed) {
+    void insert(unsigned address) {
         unsigned addressRow = getRow(address, this->BSize, this->row);
         unsigned addressTag = getTag(address, this->BSize, this->row);
         for (unsigned i = 0; i < this->column; i++) {
@@ -113,16 +115,17 @@ public:
                 this->cache[addressRow * this->column + i].tag = addressTag;
                 this->cache[addressRow * this->column + i].address = address;
                 this->cache[addressRow * this->column + i].valid = true;
+                this->cache[addressRow * this->column + i].dirty = false;
                 this->updateLru(addressRow, i);
                 return;
             }
         }
         int way = getLruWay(addressRow);
-        if(way == -1) std::cout << "*****************************" << std::endl;
-        if(removed != nullptr) *removed = this->cache[addressRow * this->column + way].address;
+        //if(way == -1) std::cout << "*****************************" << std::endl;
         this->cache[addressRow * this->column + way].tag = addressTag;
         this->cache[addressRow * this->column + way].address = address;
         this->cache[addressRow * this->column + way].valid = true;
+        this->cache[addressRow * this->column + way].dirty = false;
         this->updateLru(addressRow, way);
     }
 
@@ -134,11 +137,78 @@ public:
             if (this->cache[addressRow * this->column + i].valid &&
                 this->cache[addressRow * this->column + i].tag == addressTag) {
                 this->cache[addressRow * this->column + i].valid = false;
+                this->cache[addressRow * this->column + i].dirty = false;
                 lru[addressRow * this->column + i] = -1;
-                break;
+                return;
             }
         }
     }
+
+    bool isSetFull(unsigned address){
+        unsigned addressRow = getRow(address, this->BSize, this->row);
+        for (unsigned i = 0; i < this->column; i++) {
+            if (!(this->cache[addressRow * this->column + i].valid)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    unsigned findVictim(unsigned address){
+        unsigned addressRow = getRow(address, this->BSize, this->row);
+        /*
+        for (unsigned i = 0; i < this->column; i++) {
+            if (!(this->cache[addressRow * this->column + i].valid)) {
+                std::cout << "*****************************" << std::endl;
+                return 99999999;
+            }
+        }*/
+        int way = getLruWay(addressRow);
+        //if(way == -1) std::cout << "*****************************" << std::endl;
+        return this->cache[addressRow * this->column + way].address;
+    }
+
+    bool snoop(unsigned address){
+        int addressRow = getRow(address,this->BSize,this->row);
+        unsigned addressTag = getTag(address,this->BSize,this->row);
+        for(unsigned i=0; i<this->column; i++){
+            if(this->cache[addressRow*this->column+i].valid && this->cache[addressRow*this->column+i].tag == addressTag){
+                return true;
+            }
+        }
+        return false;
+    }
+
+    bool isDirty(unsigned address){
+        int addressRow = getRow(address,this->BSize,this->row);
+        unsigned addressTag = getTag(address,this->BSize,this->row);
+        for(unsigned i=0; i<this->column; i++){
+            if(this->cache[addressRow*this->column+i].valid && this->cache[addressRow*this->column+i].tag == addressTag){
+                return this->cache[addressRow*this->column+i].dirty;
+            }
+        }
+        //std::cout << "*****************************" << std::endl;
+        return false;
+    }
+
+    void setDirty(unsigned address, bool isDirty){
+        int addressRow = getRow(address,this->BSize,this->row);
+        unsigned addressTag = getTag(address,this->BSize,this->row);
+        for(unsigned i=0; i<this->column; i++){
+            if(this->cache[addressRow*this->column+i].valid && this->cache[addressRow*this->column+i].tag == addressTag){
+                this->cache[addressRow*this->column+i].dirty=isDirty;
+                if(isDirty){
+                    this->updateLru(addressRow,i);
+                }
+                return;
+            }
+        }
+    }
+
+
+
+
+
 
     void print(uint32_t address){
         unsigned addressRow = getRow(address, this->BSize, this->row);
@@ -149,18 +219,27 @@ public:
         for(unsigned i=0; i<row; i++){
             std::cout << "set " << i << ":  ";
             for(unsigned j=0; j<column; j++){
-                std::cout << this->cache[i*column+j].valid << " ";
-                std::cout << this->cache[i*column+j].address << " ";
-                std::cout << this->cache[i*column+j].tag << " , ";
+                if(this->cache[i*column+j].valid){
+                    std::cout << this->cache[i*column+j].address << " ";
+                    std::cout << this->cache[i*column+j].tag << " , ";
+                }
+                else std::cout << " X ";
             }
-            std::cout << "    lru: ";
+            std::cout << std::endl;
+            std::cout << "lru: " << i << ": ";
             for(unsigned j=0; j<column; j++){
-                std::cout << this->lru[i*column+j] << " ";
+                if(this->cache[i*column+j].valid){
+                    std::cout << this->lru[i*column+j] << " ";
+                }
+                else std::cout << " X ";
             }
             std::cout << std::endl;
         }
     }
+
+
 };
+
 
 class cacheSimulator{
 public:
@@ -197,26 +276,127 @@ public:
 
     void access(char operation , uint32_t num){
         this->access_num+=1;
-        if(operation == 'r' || (operation == 'w' && this->WrAlloc==1)){
+        //Operation read
+        if(operation == 'r'){
             if(!L1.isHit(num)){
                 if(!L2.isHit(num)){
-                    unsigned address;
-                    L2.insert(num ,&address);
-                    L1.remove(address);
-                    L1.insert(num ,nullptr);
+                    //Add MemCycles to TotalCycles
                     this->totalCyc+=this->MemCyc;
+                    unsigned victim;
+                    if(L2.isSetFull(num)){
+                        victim = L2.findVictim(num);
+                        if(L1.snoop(victim)){
+                            if(L1.isDirty(victim)){
+                                L2.setDirty(victim,true);
+                                L1.setDirty(victim,false);
+                            }
+                            L1.remove(victim);
+                        }
+                        if(L2.isDirty(victim)){
+                            L2.setDirty(victim,false);
+                        }
+                        if(L2.isDirty(victim)){
+                            L2.setDirty(victim,false);
+                        }
+                        L2.remove(victim);
+                    }
+                    L2.insert(num);
+                    if(L1.isSetFull(num)){
+                        victim = L1.findVictim(num);
+                        if(L1.isDirty(victim)){
+                            L2.setDirty(victim,true);
+                            L1.setDirty(victim,false);
+                        }
+                        L1.remove(victim);
+                    }
+                    L1.insert(num);
                 }
-                //L2 Hit
+                //L1 Miss - L2 Hit
                 else{
-                    L1.insert(num ,nullptr);
+                    unsigned victim;
+                    if(L1.isSetFull(num)){
+                        victim = L1.findVictim(num);
+
+                        if(L1.isDirty(victim)){
+                            L1.setDirty(victim,false);
+                            L2.setDirty(victim,true);
+                        }
+                        L1.remove(victim);
+                    }
+                    L1.insert(num);
                 }
             }
         }
-        //operation Write with no allocate
+        //Operation write
         else{
-            if(!L1.isHit(num)) {
-                if (!L2.isHit(num)) {
-                    this->totalCyc+=this->MemCyc;
+            //Write allocate
+            if(this->WrAlloc==1){
+                if(!L1.isHit(num)){
+                    if(!L2.isHit(num)){
+                        //Add MemCycles to TotalCycles
+                        this->totalCyc+=this->MemCyc;
+                        unsigned victim;
+                        if(L2.isSetFull(num)){
+                            victim = L2.findVictim(num);
+                            if(L1.snoop(victim)){
+                                if(L1.isDirty(victim)){
+                                    L2.setDirty(victim,true);
+                                    L1.setDirty(victim,false);
+                                }
+                                L1.remove(victim);
+                            }
+                            if(L2.isDirty(victim)){
+                                L2.setDirty(victim,false);
+                            }
+                            if(L2.isDirty(victim)){
+                                L2.setDirty(victim,false);
+                            }
+                            L2.remove(victim);
+                        }
+                        L2.insert(num);
+                        if(L1.isSetFull(num)){
+                            victim = L1.findVictim(num);
+                            if(L1.isDirty(victim)){
+                                L2.setDirty(victim,true);
+                                L1.setDirty(victim,false);
+                            }
+                            L1.remove(victim);
+                        }
+                        L1.insert(num);
+                        L1.setDirty(num,true);
+                    }
+                        //L1 Miss - L2 Hit
+                    else{
+                        unsigned victim;
+                        if(L1.isSetFull(num)){
+                            victim = L1.findVictim(num);
+
+                            if(L1.isDirty(victim)){
+                                L1.setDirty(victim,false);
+                                L2.setDirty(victim,true);
+                            }
+                            L1.remove(victim);
+                        }
+                        L1.insert(num);
+                        L1.setDirty(num,true);
+                    }
+                }
+            }
+            //Write No allocate
+            else{
+                if(!L1.isHit(num)){
+                    if(!L2.isHit(num)) {
+                        //Add MemCycles to TotalCycles
+                        this->totalCyc += this->MemCyc;
+                    }
+                        //L1 Miss - L2 Hit
+                    else{
+                        L2.setDirty(num,true);
+                    }
+                }
+                //L1 Hit
+                else{
+                    L1.setDirty(num,true);
                 }
             }
         }
