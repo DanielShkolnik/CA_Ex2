@@ -15,6 +15,9 @@ using std::ifstream;
 using std::stringstream;
 
 int main(int argc, char **argv) {
+
+    bool debug=false, debugPrint=false;
+
     if (argc < 19) {
         cerr << "Not enough arguments" << endl;
         return 0;
@@ -88,26 +91,30 @@ int main(int argc, char **argv) {
         }
 
         // DEBUG - remove this line
-        cout << "operation: " << operation;
+        if(debug) cout << "-------------------->operation: " << operation;
 
         string cutAddress = address.substr(2); // Removing the "0x" part of the address
 
         // DEBUG - remove this line
-        cout << ", address (hex)" << cutAddress;
+        if(debug) cout << ", address (hex)" << cutAddress;
 
         uint32_t num = 0;
         num = strtoul(cutAddress.c_str(), NULL, 16);
 
         // DEBUG - remove this line
-        cout << " (dec) " << num << endl;
+        if(debug) cout << " (dec) " << num << endl;
 
-        std::cout << "Before: " << std::endl;
-        std::cout << "Before: " << std::endl;
-        CSim.print(num);
+        if(debugPrint){
+            std::cout << "Before: " << std::endl;
+            CSim.print(num);
+        }
         CSim.access(operation, num);
-        std::cout << CSim.totalL1Miss << " - " << CSim.totalL2Miss << endl;
-        std::cout << "After: " << std::endl;
-        CSim.print(num);
+        //if(debug) std::cout << CSim.totalL1Miss << " - " << CSim.totalL2Miss << endl;
+        if(debugPrint){
+            std::cout << CSim.totalL1Miss << " - " << CSim.totalL2Miss << endl;
+            std::cout << "After: " << std::endl;
+            CSim.print(num);
+        }
 
 
     }

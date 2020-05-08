@@ -59,6 +59,17 @@ public:
         return indx;
     }
 
+    unsigned getWay(uint32_t address){
+        for(unsigned i=0; i<this->column; i++){
+            int addressRow = getRow(address,this->BSize,this->row);
+            unsigned addressTag = getTag(address,this->BSize,this->row);
+            if(this->cache[addressRow*this->column+i].valid && this->cache[addressRow*this->column+i].tag == addressTag){
+                return i;
+            }
+        }
+        return 99999;
+    }
+
     unsigned getTag(uint32_t address ,unsigned BSize, unsigned row){
         uint32_t indx = address;
         indx = indx >> ((int)log2(row) + BSize);
@@ -77,11 +88,13 @@ public:
 
 
     void updateLru(int set, int way){
-        int old_priority = lru[set*this->column+way];
-        lru[set*this->column+way] = this->column - 1;
-        for(unsigned i = 0 ; i < this->column ; i++){
-            if(((int)i != way) && (lru[set*this->column+i] > old_priority))
-                lru[set*this->column+i]--;
+        if(this->cache[set*this->column+way].valid) {
+            int old_priority = lru[set * this->column + way];
+            lru[set * this->column + way] = this->column - 1;
+            for (unsigned i = 0; i < this->column; i++) {
+                if (((int) i != way) && (lru[set * this->column + i] > old_priority))
+                    lru[set * this->column + i]--;
+            }
         }
     }
 
@@ -138,7 +151,7 @@ public:
                 this->cache[addressRow * this->column + i].tag == addressTag) {
                 this->cache[addressRow * this->column + i].valid = false;
                 this->cache[addressRow * this->column + i].dirty = false;
-                lru[addressRow * this->column + i] = -1;
+                lru[addressRow * this->column + i] = 0;
                 return;
             }
         }
@@ -184,6 +197,7 @@ public:
         unsigned addressTag = getTag(address,this->BSize,this->row);
         for(unsigned i=0; i<this->column; i++){
             if(this->cache[addressRow*this->column+i].valid && this->cache[addressRow*this->column+i].tag == addressTag){
+                //if(this->cache[addressRow*this->column+i].dirty) this->updateLru(addressRow,i);
                 return this->cache[addressRow*this->column+i].dirty;
             }
         }
@@ -220,6 +234,7 @@ public:
             std::cout << "set " << i << ":  ";
             for(unsigned j=0; j<column; j++){
                 if(this->cache[i*column+j].valid){
+                    if(this->cache[i*column+j].dirty) std::cout << "d"  << " ";
                     std::cout << this->cache[i*column+j].address << " ";
                     std::cout << this->cache[i*column+j].tag << " , ";
                 }
@@ -295,9 +310,6 @@ public:
                         if(L2.isDirty(victim)){
                             L2.setDirty(victim,false);
                         }
-                        if(L2.isDirty(victim)){
-                            L2.setDirty(victim,false);
-                        }
                         L2.remove(victim);
                     }
                     L2.insert(num);
@@ -318,14 +330,20 @@ public:
                         victim = L1.findVictim(num);
 
                         if(L1.isDirty(victim)){
-                            L1.setDirty(victim,false);
                             L2.setDirty(victim,true);
+                            L1.setDirty(victim,false);
                         }
                         L1.remove(victim);
                     }
                     L1.insert(num);
                 }
             }
+            // L1 Hit
+            /*else{
+                unsigned addressRow = this->L1.getRow(num, this->BSize, this->L1.row);
+                unsigned addressWay = this->L1.getWay(num);
+                L1.updateLru(addressRow,addressWay);
+            }*/
         }
         //Operation write
         else{
@@ -333,6 +351,7 @@ public:
             if(this->WrAlloc==1){
                 if(!L1.isHit(num)){
                     if(!L2.isHit(num)){
+
                         //Add MemCycles to TotalCycles
                         this->totalCyc+=this->MemCyc;
                         unsigned victim;
@@ -348,11 +367,9 @@ public:
                             if(L2.isDirty(victim)){
                                 L2.setDirty(victim,false);
                             }
-                            if(L2.isDirty(victim)){
-                                L2.setDirty(victim,false);
-                            }
                             L2.remove(victim);
                         }
+                        //std::cout << "*******************" << std::endl;
                         L2.insert(num);
                         if(L1.isSetFull(num)){
                             victim = L1.findVictim(num);
@@ -372,14 +389,19 @@ public:
                             victim = L1.findVictim(num);
 
                             if(L1.isDirty(victim)){
-                                L1.setDirty(victim,false);
                                 L2.setDirty(victim,true);
+                                L1.setDirty(victim,false);
                             }
                             L1.remove(victim);
                         }
                         L1.insert(num);
                         L1.setDirty(num,true);
+                        L2.setDirty(num,false);
                     }
+                }
+                //L1 Hit
+                else{
+                    L1.setDirty(num,true);
                 }
             }
             //Write No allocate
