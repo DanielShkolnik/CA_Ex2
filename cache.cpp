@@ -234,8 +234,8 @@ public:
             std::cout << "set " << i << ":  ";
             for(unsigned j=0; j<column; j++){
                 if(this->cache[i*column+j].valid){
-                    if(this->cache[i*column+j].dirty) std::cout << "d"  << " ";
-                    std::cout << this->cache[i*column+j].address << " ";
+                    if(this->cache[i*column+j].dirty) std::cout << "V"  << " ";
+                    //std::cout << this->cache[i*column+j].address << " ";
                     std::cout << this->cache[i*column+j].tag << " , ";
                 }
                 else std::cout << " X ";
@@ -336,6 +336,10 @@ public:
                         L1.remove(victim);
                     }
                     L1.insert(num);
+                    if(L2.isDirty(num)){
+                        L1.setDirty(num,true);
+                        L2.setDirty(num,false);
+                    }
                 }
             }
             // L1 Hit
@@ -369,7 +373,6 @@ public:
                             }
                             L2.remove(victim);
                         }
-                        //std::cout << "*******************" << std::endl;
                         L2.insert(num);
                         if(L1.isSetFull(num)){
                             victim = L1.findVictim(num);
